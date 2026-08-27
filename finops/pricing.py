@@ -102,3 +102,36 @@ def spot_checkpoint_cost(
         "on_demand_cost": round(on_demand_cost, 2),
         "savings_pct": round(savings_pct, 1),
     }
+
+
+def cache_is_worth_it(
+    avg_cache_reads: float,
+    write_cost_per_m: float = 3.75,     # e.g., prompt cache write price per 1M tokens
+    base_read_price_per_m: float = 3.00, # standard input price per 1M tokens
+    read_discount: float = 0.10,        # 90% discount on cache read (cost is 0.10x)
+) -> dict:
+    """Extension 3: Determine if prompt caching is economically beneficial.
+
+    Caching requires a write cost up-front. Each subsequent read saves:
+      savings_per_read = base_read_price * (1 - read_discount)
+
+    Break-even reads N:
+      N * savings_per_read >= write_cost
+      N >= write_cost / (base_read_price * (1 - read_discount))
+    """
+    savings_per_read = base_read_price_per_m * (1.0 - read_discount)
+    if savings_per_read <= 0:
+        return {
+            "is_worth_it": False,
+            "break_even_reads": float("inf"),
+            "net_savings_per_m": 0.0,
+        }
+    break_even_reads = write_cost_per_m / savings_per_read
+    net_savings_per_m = (avg_cache_reads * savings_per_read) - write_cost_per_m
+    return {
+        "is_worth_it": avg_cache_reads >= break_even_reads,
+        "break_even_reads": round(break_even_reads, 2),
+        "net_savings_per_m": round(net_savings_per_m, 4),
+        "savings_ratio": round((avg_cache_reads * savings_per_read) / write_cost_per_m, 2) if write_cost_per_m > 0 else float("inf"),
+    }
+
